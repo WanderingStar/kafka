@@ -176,7 +176,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       shortFlag, "1",
       "--alter",
-      "--add-config-file"))
+      "--add-config-file", "-"))
     createOpts.checkArgs()
 
     // For alter and deleted config
@@ -248,7 +248,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "a=b,c=d",
-      "--add-config-file"
+      "--add-config-file", "-"
     ))
     createOpts.checkArgs()
   }
@@ -274,7 +274,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val addConfigFileArgs =
       if (useStdin) {
         System.setIn(new ByteArrayInputStream(fileContents.getBytes))
-        Array("--add-config-file")
+        Array("--add-config-file", "-")
       } else {
         val file = File.createTempFile("testParseConfigsToBeAddedForAddConfigFile", ".properties")
         file.deleteOnExit()

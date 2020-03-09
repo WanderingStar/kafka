@@ -248,15 +248,16 @@ object ConfigCommand extends Config {
   private[admin] def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
     val props = new Properties
     if (opts.options.has(opts.addConfigFile)) {
-      if (opts.options.hasArgument(opts.addConfigFile)) {
-        val inputStream = new FileInputStream(opts.options.valueOf(opts.addConfigFile))
+      val file = opts.options.valueOf(opts.addConfigFile)
+      if (file.getPath.equals("-")) {
+        props.load(System.in)
+      } else {
+        val inputStream = new FileInputStream(file)
         try {
           props.load(inputStream)
         } finally {
           inputStream.close()
         }
-      } else {
-        props.load(System.in)
       }
     }
     if (opts.options.has(opts.addConfig)) {
@@ -656,8 +657,8 @@ object ConfigCommand extends Config {
             s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
             .withRequiredArg
             .ofType(classOf[String])
-    val addConfigFile = parser.accepts("add-config-file", "Path to a properties file with configs to add. If no file is specified, properties are read from standard input. See add-config for a list of valid configurations.")
-            .withOptionalArg()
+    val addConfigFile = parser.accepts("add-config-file", "Path to a properties file with configs to add. If '-' is specified, properties are read from standard input. See add-config for a list of valid configurations.")
+            .withRequiredArg
             .ofType(classOf[File])
     val deleteConfig = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
             .withRequiredArg
