@@ -41,7 +41,7 @@ import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.jdk.CollectionConverters._
-import scala.collection._
+import scala.collection.{mutable, _}
 
 /**
  * This script can be used to change configs for topics/clients/users/brokers dynamically
@@ -279,15 +279,27 @@ object ConfigCommand extends Config {
     props
   }
 
-  private[admin] def parseConfigsToBeDeleted(opts: ConfigCommandOptions): Seq[String] = {
+  private[admin] def parseConfigsToBeDeleted(opts: ConfigCommandOptions): Set[String] = {
+    val configsToBeDeleted = mutable.LinkedHashSet[String]()
     if (opts.options.has(opts.deleteConfig)) {
-      val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfig).asScala.map(_.trim())
-      val propsToBeDeleted = new Properties
-      configsToBeDeleted.foreach(propsToBeDeleted.setProperty(_, ""))
-      configsToBeDeleted
+      configsToBeDeleted ++= opts.options.valuesOf(opts.deleteConfig).asScala.map(_.trim())
     }
-    else
-      Seq.empty
+    if (opts.options.has(opts.deleteConfigFile)) {
+      val file = opts.options.valueOf(opts.deleteConfigFile)
+      val props = new Properties
+      if (file.getPath.equals("-")) {
+        props.load(System.in)
+      } else {
+        val inputStream = new FileInputStream(file)
+        try {
+          props.load(inputStream)
+        } finally {
+          inputStream.close()
+        }
+      }
+      configsToBeDeleted ++= props.stringPropertyNames().asScala
+    }
+    configsToBeDeleted
   }
 
   private def processCommand(opts: ConfigCommandOptions): Unit = {
@@ -664,6 +676,9 @@ object ConfigCommand extends Config {
             .withRequiredArg
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
+    val deleteConfigFile = parser.accepts("delete-config-file", "Path to a properties file with configs to remove. If '-' is specified, properties are read from standard input. All keys that appear in the properties file will be deleted, regardless of what values appear in the file.")
+      .withRequiredArg
+      .ofType(classOf[File])
     val forceOpt = parser.accepts("force", "Suppress console prompts")
     val topic = parser.accepts("topic", "The topic's name.")
       .withRequiredArg
@@ -782,12 +797,13 @@ object ConfigCommand extends Config {
         val isAddConfigPresent = options.has(addConfig)
         val isAddConfigFilePresent = options.has(addConfigFile)
         val isDeleteConfigPresent = options.has(deleteConfig)
+        val isDeleteConfigFilePresent = options.has(deleteConfigFile)
 
         if(isAddConfigPresent && isAddConfigFilePresent)
           throw new IllegalArgumentException("Only one of --add-config or --add-config-file must be specified")
 
-        if(!isAddConfigPresent && !isAddConfigFilePresent && ! isDeleteConfigPresent)
-          throw new IllegalArgumentException("At least one of --add-config, --add-config-file, or --delete-config must be specified with --alter")
+        if(!isAddConfigPresent && !isAddConfigFilePresent && ! isDeleteConfigPresent && !isDeleteConfigFilePresent)
+          throw new IllegalArgumentException("At least one of --add-config, --add-config-file, --delete-config, or --delete-config-file must be specified with --alter")
       }
     }
   }

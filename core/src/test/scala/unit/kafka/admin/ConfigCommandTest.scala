@@ -168,9 +168,23 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     createOpts.checkArgs()
 
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      "--entity-name", "1",
+      "--entity-type", entityType,
+      "--alter",
+      "--add-config-file", "/tmp/new.properties"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       shortFlag, "1",
       "--alter",
       "--add-config-file", "/tmp/new.properties"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      "--entity-name", "1",
+      "--entity-type", entityType,
+      "--alter",
+      "--add-config-file", "-"))
     createOpts.checkArgs()
 
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
@@ -191,6 +205,64 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       shortFlag, "1",
       "--alter",
       "--delete-config", "a,b,c"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      "--entity-name", "1",
+      "--entity-type", entityType,
+      "--alter",
+      "--delete-config-file", "/tmp/new.properties"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--delete-config-file", "/tmp/new.properties"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      "--entity-name", "1",
+      "--entity-type", entityType,
+      "--alter",
+      "--delete-config-file", "-"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--delete-config-file", "-"))
+    createOpts.checkArgs()
+
+    // Both delete and delete file are allowed
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      "--entity-name", "1",
+      "--entity-type", entityType,
+      "--alter",
+      "--delete-config", "a,b,c",
+      "--delete-config-file", "/tmp/new.properties"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--delete-config", "a,b,c",
+      "--delete-config-file", "/tmp/new.properties"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      "--entity-name", "1",
+      "--entity-type", entityType,
+      "--alter",
+      "--delete-config", "a,b,c",
+      "--delete-config-file", "-"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--delete-config", "a,b,c",
+      "--delete-config-file", "-"))
     createOpts.checkArgs()
 
     // For alter and both added, deleted config
@@ -255,15 +327,25 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testParseConfigsToBeAddedForAddConfigFile(): Unit = {
-    testParseConfigsToBeAddedFromFile(false)
+    testParseConfigsToBeAddedOrDeletedFromFile(true, false)
   }
 
   @Test
   def testParseConfigsToBeAddedForAddConfigFileStdin(): Unit = {
-    testParseConfigsToBeAddedFromFile(true)
+    testParseConfigsToBeAddedOrDeletedFromFile(true, true)
   }
 
-  def testParseConfigsToBeAddedFromFile(useStdin: Boolean): Unit = {
+  @Test
+  def testParseConfigsToBeDeletedForDeleteConfigFile(): Unit = {
+    testParseConfigsToBeAddedOrDeletedFromFile(false, false)
+  }
+
+  @Test
+  def testParseConfigsToBeDeletedForDeleteConfigFileStdin(): Unit = {
+    testParseConfigsToBeAddedOrDeletedFromFile(false, true)
+  }
+
+  def testParseConfigsToBeAddedOrDeletedFromFile(isAdded: Boolean, useStdin: Boolean): Unit = {
     val fileContents =
       """a=b
         |c = d
@@ -271,32 +353,62 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         |nested = [[1, 2], [3, 4]]
         |""".stripMargin
 
+    val argument = if (isAdded) "--add-config-file" else "--delete-config-file"
+
     val addConfigFileArgs =
       if (useStdin) {
         System.setIn(new ByteArrayInputStream(fileContents.getBytes))
-        Array("--add-config-file", "-")
+        Array(argument, "-")
       } else {
-        val file = File.createTempFile("testParseConfigsToBeAddedForAddConfigFile", ".properties")
+        val file = File.createTempFile("testParseConfigsToBeAddedOrDeletedFromFile", ".properties")
         file.deleteOnExit()
         val writer = new FileWriter(file)
         writer.write(fileContents)
         writer.close()
-        Array("--add-config-file", file.getPath)
+        Array(argument, file.getPath)
       }
 
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "1",
       "--entity-type", "brokers",
-      "--alter")
+      "--alter"
+    )
       ++ addConfigFileArgs)
     createOpts.checkArgs()
 
-    val addedProps = ConfigCommand.parseConfigsToBeAdded(createOpts)
-    assertEquals(4, addedProps.size())
-    assertEquals("b", addedProps.getProperty("a"))
-    assertEquals("d", addedProps.getProperty("c"))
-    assertEquals("{\"key\": \"val\"}", addedProps.getProperty("json"))
-    assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"))
+    if (isAdded) {
+      val addedProps = ConfigCommand.parseConfigsToBeAdded(createOpts)
+      assertEquals(4, addedProps.size())
+      assertEquals("b", addedProps.getProperty("a"))
+      assertEquals("d", addedProps.getProperty("c"))
+      assertEquals("{\"key\": \"val\"}", addedProps.getProperty("json"))
+      assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"))
+    } else {
+      val deletedProps = ConfigCommand.parseConfigsToBeDeleted(createOpts)
+      assertEquals(Set("a", "c", "json", "nested"), deletedProps)
+    }
+  }
+
+  @Test
+  def testParseConfigsToBeDeletedFromOptionAndFile(): Unit = {
+    val fileContents =
+      """a=b
+        |c = d
+        |""".stripMargin
+
+    System.setIn(new ByteArrayInputStream(fileContents.getBytes))
+
+    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter",
+      "--delete-config", "c,e",
+      "--delete-config-file", "-"
+    ))
+    createOpts.checkArgs()
+
+    val deletedProps = ConfigCommand.parseConfigsToBeDeleted(createOpts)
+    assertEquals(Set("a", "c", "e"), deletedProps)
   }
 
   def doTestOptionEntityTypeNames(zkConfig: Boolean): Unit = {
