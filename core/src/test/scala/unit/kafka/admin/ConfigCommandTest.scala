@@ -16,7 +16,7 @@
  */
 package kafka.admin
 
-import java.io.{ByteArrayInputStream, File, FileWriter}
+import java.io.{File, FileWriter}
 import java.util
 import java.util.Properties
 
@@ -173,12 +173,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--add-config-file", "/tmp/new.properties"))
     createOpts.checkArgs()
 
-    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
-      shortFlag, "1",
-      "--alter",
-      "--add-config-file", "-"))
-    createOpts.checkArgs()
-
     // For alter and deleted config
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       "--entity-name", "1",
@@ -248,22 +242,13 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "a=b,c=d",
-      "--add-config-file", "-"
+      "--add-config-file", "/tmp/new.properties"
     ))
     createOpts.checkArgs()
   }
 
   @Test
   def testParseConfigsToBeAddedForAddConfigFile(): Unit = {
-    testParseConfigsToBeAddedFromFile(false)
-  }
-
-  @Test
-  def testParseConfigsToBeAddedForAddConfigFileStdin(): Unit = {
-    testParseConfigsToBeAddedFromFile(true)
-  }
-
-  def testParseConfigsToBeAddedFromFile(useStdin: Boolean): Unit = {
     val fileContents =
       """a=b
         |c = d
@@ -271,18 +256,13 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         |nested = [[1, 2], [3, 4]]
         |""".stripMargin
 
-    val addConfigFileArgs =
-      if (useStdin) {
-        System.setIn(new ByteArrayInputStream(fileContents.getBytes))
-        Array("--add-config-file", "-")
-      } else {
-        val file = File.createTempFile("testParseConfigsToBeAddedForAddConfigFile", ".properties")
-        file.deleteOnExit()
-        val writer = new FileWriter(file)
-        writer.write(fileContents)
-        writer.close()
-        Array("--add-config-file", file.getPath)
-      }
+    val file = File.createTempFile("testParseConfigsToBeAddedForAddConfigFile", ".properties")
+    file.deleteOnExit()
+    val writer = new FileWriter(file)
+    writer.write(fileContents)
+    writer.close()
+
+    val addConfigFileArgs = Array("--add-config-file", file.getPath)
 
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "1",
