@@ -162,6 +162,13 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     createOpts.checkArgs()
 
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      "--entity-name", "1",
+      "--entity-type", entityType,
+      "--alter",
+      "--add-config-file", "/tmp/new.properties"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       shortFlag, "1",
       "--alter",
       "--add-config", "a=b,c=d"))
